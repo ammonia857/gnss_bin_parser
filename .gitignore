@@ -1,0 +1,43 @@
+# ===== 构建产物 =====
+build/
+
+# ===== CMake 生成文件 =====
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CMakeLists.txt.user
+CTestTestfile.cmake
+Makefile
+*.cmake.stamp
+
+# ===== 编译输出 =====
+*.exe
+*.obj
+*.o
+*.lib
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.a
+*.so
+*.dylib
+
+# ===== 二进制数据文件（如需纳入版本管理请用 git add -f）=====
+*.bin
+
+# ===== Visual Studio =====
+.vs/
+*.vcxproj.user
+*.suo
+*.sln.ide
+
+# ===== 生成的结果数据 =====
+output/
+output*/
+
+# ===== 编辑器 =====
+.vscode/
+.idea/
+*.swp
+.DS_Store
