@@ -92,57 +92,6 @@ bool BinParser::verify_sync(const uint8_t* data) noexcept {
            data[2] == SYNC_BYTE_2;
 }
 
-bool BinParser::parse_header(bin_io::BinStreamReader& reader, FrameHeader& header) {
-    // OEM7帧头(标准28字节): Sync(3)已跳过
-    // HdrLen(1)+MsgID(2)+MsgType(1)+Port(1)+MsgLen(2)+Seq(2)+Idle(1)+TimeSts(1)
-    // +Week(2)+GPSms(4)+RcvStatus(4)+Reserved(2)+SWVer(2) = 25字节(不含sync)
-    // 注意：官方允许 hdr_len > 28（追加字段），故只要求 >= 标准长度
-
-    header.header_length = reader.read_u8();
-
-    if (header.header_length < OEM7_HEADER_LENGTH) {
-        return false;
-    }
-
-    header.message_id   = reader.read_u16();
-    header.message_type = reader.read_u8();
-    header.port_address = reader.read_u8();
-    header.body_length  = reader.read_u16();
-    header.sequence     = reader.read_u16();
-    header.idle_time    = reader.read_u8();
-    header.time_status  = reader.read_u8();
-    header.gps_time.week   = reader.read_u16();
-    header.gps_time.tow_ms = reader.read_u32();
-    header.receiver_status     = reader.read_u32();
-    header.reserved            = reader.read_u16();
-    header.receiver_sw_version = reader.read_u16();
-
-    return true;
-}
-
-// ============================================================
-// 消息体解析函数
-// ============================================================
-
-bool BinParser::parse_range_body(bin_io::BinStreamReader& reader,
-                                  uint16_t num_obs, RangeFrame& frame) {
-    (void)reader;
-    (void)num_obs;
-    (void)frame;
-    // RANGE body parsing is handled inline in BinParser::parse()
-    // for 44-byte observation format via direct memory access.
-    return false;
-}
-
-bool BinParser::parse_bestpos_body(bin_io::BinStreamReader& reader,
-                                    BestPosFrame& frame) {
-    (void)reader;
-    (void)frame;
-    // BESTPOS body parsing is handled inline in BinParser::parse()
-    // for 72-byte BESTPOSA format via direct memory access.
-    return false;
-}
-
 // ============================================================
 // CRC32 计算
 // ============================================================
@@ -168,8 +117,6 @@ void BinParser::log(const std::string& msg) {
 
 BinParser::ParseStats BinParser::parse(bin_io::MmapFile& mmap_file) {
     stats_.reset();
-
-    bin_io::BinStreamReader reader(mmap_file);
 
     std::vector<uint8_t> pending;
     pending.reserve(65536);

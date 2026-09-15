@@ -133,33 +133,6 @@ private:
     static bool verify_sync(const uint8_t* data) noexcept;
 
     /**
-     * @brief 从字节流解析帧头
-     * @param reader 字节流读取器（读取位置必须在同步头后的header_length偏移处）
-     * @param[out] header 解析结果
-     * @return true=解析成功
-     */
-    static bool parse_header(bin_io::BinStreamReader& reader, FrameHeader& header);
-
-    /**
-     * @brief 解析RANGE消息体（观测值列表）
-     * @param reader 字节流读取器
-     * @param num_obs 观测数量（从帧头已知）
-     * @param[out] frame 解析结果
-     * @return true=解析成功
-     */
-    static bool parse_range_body(bin_io::BinStreamReader& reader,
-                                  uint16_t num_obs, RangeFrame& frame);
-
-    /**
-     * @brief 解析BESTPOS消息体
-     * @param reader 字节流读取器
-     * @param[out] frame 解析结果
-     * @return true=解析成功
-     */
-    static bool parse_bestpos_body(bin_io::BinStreamReader& reader,
-                                    BestPosFrame& frame);
-
-    /**
      * @brief 计算CRC32校验值（与帧尾CRC对比）
      * @param data 数据起始（从sync开始）
      * @param length 数据长度（含帧头+body，不含CRC本身）

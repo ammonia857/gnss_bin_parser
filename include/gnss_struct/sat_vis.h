@@ -1,9 +1,11 @@
 #pragma once
 /**
  * @file    sat_vis.h
- * @brief   SATVIS卫星可见性帧数据结构（NovAtel OEM7）
- * @details 定义单颗卫星的天线方位角和仰角信息，以及完整的SATVIS帧。
- *          SATVIS帧对应OEM7 BIN中Message ID=48的消息。
+ * @brief   SATVIS/SATVIS2卫星可见性帧数据结构（NovAtel OEM7）
+ * @details 定义单颗卫星的天线方位角和仰角信息，以及完整的可见性帧。
+ *          注意：SATVIS 的 Message ID=48 是 **OEM6 旧日志**，OEM7 已由
+ *          SATVIS2（Message ID=1043）取代；本工程的解析器只解析 SATVIS2，
+ *          遇到 48 时计入 ParseStats::unsupported_frames。
  */
 
 #include "gnss_time.h"
@@ -39,9 +41,12 @@ struct SatVisibility {
 };
 
 /**
- * @brief SATVIS卫星可见性帧（完整帧，OEM7 ID=48）
+ * @brief SATVIS卫星可见性帧（OEM6 旧日志，Message ID=48）
  * @details 每个历元包含一个卫星系统在某时刻的所有可见卫星信息。
  *          用于星历预测、选星策略和定位解算的卫星筛选。
+ *
+ *          @warning OEM7 固件已用 SATVIS2（ID=1043）取代本日志，
+ *                   下列布局仅供参考，本工程不再解析 SATVIS。
  *
  *          二进制帧格式（body部分）：
  *          [卫星系统: 1B] [卫星总数: 1B] [保留: 2B]
@@ -50,7 +55,7 @@ struct SatVisibility {
  */
 struct SatVisFrame {
     GpsTime gps_time;                  ///< GPS观测时刻
-    SatelliteSystem sat_system;         ///< 所属卫星星座
+    SatelliteSystem sat_system = SatelliteSystem::UNKNOWN; ///< 所属卫星星座
     uint8_t total_sats = 0;            ///< 本帧卫星总数
     std::vector<SatVisibility> sats;   ///< 卫星可见性列表
 

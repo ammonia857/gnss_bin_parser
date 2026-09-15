@@ -26,20 +26,47 @@ const char* solution_status_to_string(SolutionStatus st) noexcept {
 }
 
 const char* position_type_to_string(uint32_t pos_type) noexcept {
+    // 完整映射表：OEM7 Commands and Logs Reference Manual v22,
+    // Chapter 3 Logs, "Table 87: Position or Velocity Type"（BESTPOS 的 pos type 字段）。
+    // 手册中明确列出二进制的取值；标注 Reserved 的区间返回 UNKNOWN。
     switch (pos_type) {
         case 0:  return "NONE";
         case 1:  return "FIXEDPOS";
         case 2:  return "FIXEDHEIGHT";
+        // 3-7 Reserved
         case 8:  return "DOPPLER_VELOCITY";
+        // 9-15 Reserved
         case 16: return "SINGLE";
         case 17: return "PSRDIFF";
         case 18: return "WAAS";
-        case 20: return "PROPAGATED";
+        case 19: return "PROPAGATED";
+        // 20-31 Reserved
         case 32: return "L1_FLOAT";
+        // 33 Reserved
         case 34: return "NARROW_FLOAT";
-        case 48: return "WIDE_INT";
+        // 35-47 Reserved
+        case 48: return "L1_INT";
+        case 49: return "WIDE_INT";
         case 50: return "NARROW_INT";
-        case 51: return "PPP";
+        case 51: return "RTK_DIRECT_INS";
+        case 52: return "INS_SBAS";
+        case 53: return "INS_PSRSP";
+        case 54: return "INS_PSRDIFF";
+        case 55: return "INS_RTKFLOAT";
+        case 56: return "INS_RTKFIXED";
+        // 57-67 Reserved
+        case 68: return "PPP_CONVERGING";
+        case 69: return "PPP";
+        case 70: return "OPERATIONAL";
+        case 71: return "WARNING";
+        case 72: return "OUT_OF_BOUNDS";
+        case 73: return "INS_PPP_CONVERGING";
+        case 74: return "INS_PPP";
+        // 75-76 手册 Table 87 未列出（分页处空缺），按未定义处理
+        case 77: return "PPP_BASIC_CONVERGING";
+        case 78: return "PPP_BASIC";
+        case 79: return "INS_PPP_BASIC_CONVERGING";
+        case 80: return "INS_PPP_BASIC";
         default: return "UNKNOWN";
     }
 }
