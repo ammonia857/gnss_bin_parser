@@ -49,7 +49,11 @@ struct GpsTime {
 };
 
 /**
- * @brief 卫星星座系统枚举
+ * @brief 卫星星座系统枚举（内部统一枚举）
+ * @note  内部取值与任何一套官方编号都不完全一致，因此**禁止**把原始字段
+ *        直接 static_cast 成本枚举；必须经由下面的显式映射函数转换：
+ *        - ch-tr-status 的 bit16-18 → system_from_ch_tr_status()
+ *        - 日志字段 Satellite System（OEM7 Table 124）→ system_from_log_enum()
  */
 enum class SatelliteSystem : uint8_t {
     GPS = 0,      ///< 美国GPS系统
@@ -58,21 +62,39 @@ enum class SatelliteSystem : uint8_t {
     GALILEO = 3,  ///< 欧盟Galileo
     SBAS = 4,     ///< 星基增强系统
     QZSS = 5,     ///< 日本准天顶
+    NAVIC = 6,    ///< 印度 NavIC（IRNSS）
+    OTHER = 7,    ///< 其它系统
     UNKNOWN = 0xFF
 };
 
 /**
- * @brief 卫星系统转中文名称
+ * @brief 卫星系统转中文/通用名称
  * @param sys 卫星系统枚举
- * @return "GPS" / "北斗" / "GLONASS" / "Galileo" / "SBAS" / "QZSS" / "未知"
+ * @return "GPS" / "北斗" / "GLONASS" / "Galileo" / "SBAS" / "QZSS" / "NavIC" / "其它" / "未知"
  */
 [[nodiscard]] const char* system_to_name(SatelliteSystem sys) noexcept;
 
 /**
  * @brief 卫星系统转单字符标识
  * @param sys 卫星系统枚举
- * @return 'G'/'C'/'R'/'E'/'S'/'J'/'?'
+ * @return 'G'/'C'/'R'/'E'/'S'/'J'/'I'(NavIC)/'?'(其它)
  */
 [[nodiscard]] char system_to_char(SatelliteSystem sys) noexcept;
+
+/**
+ * @brief ch-tr-status 的 bit16-18（OEM7 Table 156 星座枚举）→ 内部枚举
+ * @param ch_tr_status RANGE 观测值中的信道跟踪状态字原始值
+ * @return 0=GPS,1=GLONASS,2=SBAS,3=Galileo,4=BeiDou,5=QZSS,6=NavIC,7=Other 对应的内部枚举
+ * @note  bit21-25 是**信号类型**（含义依赖系统），不能用它反推星座。
+ */
+[[nodiscard]] SatelliteSystem system_from_ch_tr_status(uint32_t ch_tr_status) noexcept;
+
+/**
+ * @brief 日志字段 Satellite System（OEM7 Table 124：0/1/2/5/6/7/9）→ 内部枚举
+ * @param value 日志中 4 字节 Satellite System 字段的原始值
+ * @return 0=GPS,1=GLONASS,2=SBAS,5=Galileo,6=BeiDou,7=QZSS,9=NavIC；4/3/8 等空缺值 → UNKNOWN
+ * @note  这套编号与 ch-tr-status 的星座编号**不是同一套**，不可混用。
+ */
+[[nodiscard]] SatelliteSystem system_from_log_enum(uint32_t value) noexcept;
 
 } // namespace gnss

@@ -3,7 +3,7 @@
  * @file    range_obs.h
  * @brief   RANGE观测日志帧数据结构
  * @details 定义单条卫星伪距/载波相位观测值结构和完整的RANGE帧。
- *          RANGE帧对应BIN中Message ID=100的消息。
+ *          RANGE帧对应BIN中Message ID=43的消息。
  */
 
 #include "gnss_time.h"
@@ -20,9 +20,9 @@ namespace gnss {
  *        卫星编号从1开始，GPS 1~32，北斗 1~63。
  */
 struct RangeObservation {
-    SatelliteSystem sat_system;   ///< 卫星星座（GPS=0/北斗=1）
+    SatelliteSystem sat_system;   ///< 卫星星座（由 ch_tr_status 的 bit16-18 映射得到）
     uint16_t        sat_prn;      ///< 卫星PRN编号（GPS 1~32，北斗 1~63）
-    uint16_t        glofreq;      ///< GLONASS频率偏置（非GLONASS为0）
+    uint16_t        glofreq;      ///< GLONASS频率偏置；官方语义：值为 (GLONASS Frequency + 7)，非GLONASS为0
     double          pseudorange;  ///< 伪距观测值（米）
     float           psr_std;      ///< 伪距标准差（米）
     double          carrier_phase;///< 载波相位观测值（周，cycle）

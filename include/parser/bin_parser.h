@@ -4,7 +4,9 @@
  * @brief   BIN帧解析器
  * @details 负责从原始字节流中识别帧边界、解析帧头、提取消息体，
  *          并根据消息ID将消息体解析为对应的GNSS结构体。
- *          支持三种帧类型：RANGE(43)、SATVIS(48)、BESTPOS(42)。
+ *          支持三种帧类型：RANGE(43)、SATVIS2(1043)、BESTPOS(42)。
+ *          注：SATVIS(48) 为 OEM6 旧日志，OEM7 已由 SATVIS2 取代，本解析器不再解析，
+ *              遇到时计入 ParseStats::unsupported_frames 并提示一次。
  */
 
 #include "frame_header.h"
@@ -47,6 +49,8 @@ public:
         size_t sync_lost_count = 0;
         size_t crc_error_count = 0;
         size_t bytes_processed = 0;
+        uint64_t malformed_frames = 0;   ///< 帧头/消息体长度自洽性校验失败等结构性错误帧数
+        uint64_t unsupported_frames = 0; ///< 结构合法但本工具不解析的日志帧数（含 SATVIS 旧日志）
 
         void reset() noexcept {
             total_frames = 0;
@@ -57,6 +61,8 @@ public:
             sync_lost_count = 0;
             crc_error_count = 0;
             bytes_processed = 0;
+            malformed_frames = 0;
+            unsupported_frames = 0;
         }
     };
 
@@ -143,16 +149,6 @@ private:
      */
     static bool parse_range_body(bin_io::BinStreamReader& reader,
                                   uint16_t num_obs, RangeFrame& frame);
-
-    /**
-     * @brief 解析SATVIS消息体
-     * @param reader 字节流读取器
-     * @param total_sats 卫星总数
-     * @param[out] frame 解析结果
-     * @return true=解析成功
-     */
-    static bool parse_satvis_body(bin_io::BinStreamReader& reader,
-                                   uint8_t total_sats, SatVisFrame& frame);
 
     /**
      * @brief 解析BESTPOS消息体

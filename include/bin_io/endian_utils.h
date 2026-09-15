@@ -2,8 +2,10 @@
 /**
  * @file    endian_utils.h
  * @brief   GNSS BIN文件字节序转换工具
- * @details 提供大端/小端字节序互转，适配GPS接收机通常使用的大端存储格式。
- *          所有函数均为inline constexpr，零开销抽象。
+ * @details 提供大端/小端字节序互转。NovAtel OEM7 BIN 消息为小端存储
+ *          （帧尾 CRC32 亦为小端），因此解析路径统一使用 little_to_host_* 与
+ *          load_*_le 系列读取器；big_to_host_* 仅保留给其它大端数据源使用。
+ *          所有函数均为inline，零开销抽象。
  */
 
 #include <cstdint>
@@ -132,6 +134,39 @@ inline float little_to_host_float(float le_val) noexcept {
 
 inline double little_to_host_double(double le_val) noexcept {
     return is_little_endian() ? le_val : swap_double(le_val);
+}
+
+// ============================================================
+// 未对齐安全读取：从任意字节地址读小端标量并转主机序
+// （NovAtel BIN 为小端；直接用 reinterpret_cast 在强对齐平台是 UB）
+// ============================================================
+
+inline uint16_t load_u16_le(const void* p) noexcept {
+    uint16_t v = 0;
+    std::memcpy(&v, p, sizeof(v));
+    return little_to_host_u16(v);
+}
+
+inline int16_t load_i16_le(const void* p) noexcept {
+    return static_cast<int16_t>(load_u16_le(p));
+}
+
+inline uint32_t load_u32_le(const void* p) noexcept {
+    uint32_t v = 0;
+    std::memcpy(&v, p, sizeof(v));
+    return little_to_host_u32(v);
+}
+
+inline float load_f32_le(const void* p) noexcept {
+    float v = 0.0f;
+    std::memcpy(&v, p, sizeof(v));
+    return little_to_host_float(v);
+}
+
+inline double load_f64_le(const void* p) noexcept {
+    double v = 0.0;
+    std::memcpy(&v, p, sizeof(v));
+    return little_to_host_double(v);
 }
 
 } // namespace bin_io

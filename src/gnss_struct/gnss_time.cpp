@@ -49,6 +49,9 @@ const char* system_to_name(SatelliteSystem sys) noexcept {
         case SatelliteSystem::GALILEO:  return "Galileo";
         case SatelliteSystem::SBAS:     return "SBAS";
         case SatelliteSystem::QZSS:     return "QZSS";
+        case SatelliteSystem::NAVIC:    return "NavIC";
+        case SatelliteSystem::OTHER:    return "其它";
+        case SatelliteSystem::UNKNOWN:  return "未知";
         default:                        return "未知";
     }
 }
@@ -61,7 +64,39 @@ char system_to_char(SatelliteSystem sys) noexcept {
         case SatelliteSystem::GALILEO:  return 'E';
         case SatelliteSystem::SBAS:     return 'S';
         case SatelliteSystem::QZSS:     return 'J';
+        case SatelliteSystem::NAVIC:    return 'I';
+        case SatelliteSystem::OTHER:    return '?';
+        case SatelliteSystem::UNKNOWN:  return '?';
         default:                        return '?';
+    }
+}
+
+SatelliteSystem system_from_ch_tr_status(uint32_t ch_tr_status) noexcept {
+    // ch-tr-status 的 bit16-18 为星座（0x00070000），bit21-25 为信号类型
+    switch ((ch_tr_status >> 16) & 0x07U) {
+        case 0:  return SatelliteSystem::GPS;
+        case 1:  return SatelliteSystem::GLONASS;
+        case 2:  return SatelliteSystem::SBAS;
+        case 3:  return SatelliteSystem::GALILEO;
+        case 4:  return SatelliteSystem::BDS;
+        case 5:  return SatelliteSystem::QZSS;
+        case 6:  return SatelliteSystem::NAVIC;
+        case 7:  return SatelliteSystem::OTHER;
+        default: return SatelliteSystem::UNKNOWN;
+    }
+}
+
+SatelliteSystem system_from_log_enum(uint32_t value) noexcept {
+    // 日志字段 "Satellite System"（OEM7 Table 124）：4/3/8 为空缺值 → UNKNOWN
+    switch (value) {
+        case 0:  return SatelliteSystem::GPS;
+        case 1:  return SatelliteSystem::GLONASS;
+        case 2:  return SatelliteSystem::SBAS;
+        case 5:  return SatelliteSystem::GALILEO;
+        case 6:  return SatelliteSystem::BDS;
+        case 7:  return SatelliteSystem::QZSS;
+        case 9:  return SatelliteSystem::NAVIC;
+        default: return SatelliteSystem::UNKNOWN;
     }
 }
 
