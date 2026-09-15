@@ -67,18 +67,36 @@ void print_help(const char* program_name) {
               << "  " << program_name << " -i data.bin -o ./result\n"
               << "  " << program_name << " -d ./bin_folder -o ./csv_output -v\n"
               << "  " << program_name << " -i data.bin -p beidou_test\n\n"
-              << "输出文件:\n"
+              << "输出文件（惰性创建：该类型无数据则不生成文件）:\n"
               << "  {prefix}_range.csv    RANGE观测数据（伪距/载波相位/多普勒/CN0）\n"
-              << "  {prefix}_satvis.csv   SATVIS卫星可见性（仰角/方位角）\n"
               << "  {prefix}_satvis2.csv  SATVIS2卫星可见性扩展（仰角/方位角/健康度）\n"
-              << "  {prefix}_bestpos.csv  BESTPOSA定位结果（纬度/经度/大地高/精度）\n\n"
+              << "  {prefix}_bestpos.csv  BESTPOS定位结果（纬度/经度/MSL高程/精度）\n\n"
               << "NovAtel OEM7 BIN帧格式说明:\n"
               << "  同步头: 0xAA 0x44 0x12 (NovAtel标准)\n"
-              << "  帧头长度: 28字节（OEM7标准）\n"
-              << "  MsgID 42 = BESTPOS定位结果帧\n"
-              << "  MsgID 43 = RANGE观测帧\n"
-              << "  MsgID 48 = SATVIS卫星可见性帧\n"
-              << "  所有数值字段均为大端字节序存储\n"
+              << "  帧头长度: 28字节（OEM7标准，官方允许追加字段，解析按 hdr_len）\n"
+              << "  所有多字节字段（含帧尾CRC32）均为【小端 little-endian】存放\n"
+              << "  CRC-32: poly=0xEDB88320, init=0, 无最终异或, 小端存放\n"
+              << "  MsgID 42   = BESTPOS  定位结果帧            【支持】\n"
+              << "  MsgID 43   = RANGE    观测帧                【支持】\n"
+              << "  MsgID 1043 = SATVIS2  卫星可见性扩展帧      【支持】\n"
+              << "  MsgID 48   = SATVIS   卫星可见性帧  【不支持】OEM6旧日志，\n"
+              << "               OEM7 已由 SATVIS2(1043) 取代，官方OEM7手册无此日志；\n"
+              << "               遇到时计入 unsupported_frames 并提示一次\n\n"
+              << "字段语义:\n"
+              << "  RANGE 的 GloFreq = GLONASS Frequency + 7（非GLONASS为0）\n"
+              << "  BESTPOS 的 Height_m 是 MSL 高程（海拔）；\n"
+              << "          椭球高 = Height_m + Undulation_m\n"
+              << "  CSV 的 Sat_System 列是【本项目内部枚举】:\n"
+              << "      0=GPS, 1=BDS, 2=GLONASS, 3=GALILEO, 4=SBAS, 5=QZSS, 6=NAVIC,\n"
+              << "      7=OTHER, 255=UNKNOWN\n"
+              << "    与官方两套编号的对应关系：\n"
+              << "      RANGE ch-tr-status bit16-18 (官方Table 156):\n"
+              << "          0=GPS, 1=GLONASS, 2=SBAS, 3=Galileo, 4=BDS, 5=QZSS,\n"
+              << "          6=NavIC, 7=Other\n"
+              << "      日志 Satellite System 字段 (官方Table 124):\n"
+              << "          0=GPS, 1=GLONASS, 2=SBAS, 5=Galileo, 6=BDS, 7=QZSS,\n"
+              << "          9=NavIC\n"
+              << "    CSV 中另附 Sat_System_Name 列便于人读\n"
               << std::endl;
 }
 
@@ -268,19 +286,40 @@ bool parse_single_file(const std::string& filepath, const CliConfig& config) {
     std::cout << "  - SATVIS可见性帧:  " << stats.satvis_frames << std::endl;
     std::cout << "  - SATVIS2可见性帧: " << stats.satvis2_frames << std::endl;
     std::cout << "  - BESTPOS定位帧:   " << stats.bestpos_frames << std::endl;
-    std::cout << "同步丢失: " << stats.sync_lost_count << std::endl;
-    std::cout << "CRC校验失败: " << stats.crc_error_count << std::endl;
+    std::cout << "同步丢失 (sync_lost):     " << stats.sync_lost_count << std::endl;
+    std::cout << "CRC校验失败 (crc_error):  " << stats.crc_error_count << std::endl;
+    std::cout << "结构异常帧 (malformed):   "
+              << static_cast<unsigned long long>(stats.malformed_frames) << std::endl;
+    std::cout << "不支持的日志帧 (unsupported): "
+              << static_cast<unsigned long long>(stats.unsupported_frames) << std::endl;
     std::cout << "\nCSV导出行数:" << std::endl;
     std::cout << "  - RANGE行:     " << csv_stats.range_rows << std::endl;
     std::cout << "  - SATVIS行:   " << csv_stats.satvis_rows << std::endl;
     std::cout << "  - SATVIS2行:  " << csv_stats.satvis2_rows << std::endl;
     std::cout << "  - BESTPOS行:  " << csv_stats.bestpos_rows << std::endl;
 
-    std::cout << "\n输出文件:" << std::endl;
-    std::cout << "  " << config.output_dir << "/" << prefix << "_range.csv" << std::endl;
-    std::cout << "  " << config.output_dir << "/" << prefix << "_satvis.csv" << std::endl;
-    std::cout << "  " << config.output_dir << "/" << prefix << "_satvis2.csv" << std::endl;
-    std::cout << "  " << config.output_dir << "/" << prefix << "_bestpos.csv" << std::endl;
+    if (exporter.had_write_error()) {
+        std::cout << "\n警告: CSV 写入错误: " << exporter.write_error_count()
+                  << " 次（部分数据可能未落盘，请检查磁盘空间/权限）" << std::endl;
+    }
+
+    std::cout << "\n输出文件（惰性创建，仅列出实际生成了数据的文件）:" << std::endl;
+    if (csv_stats.range_rows > 0) {
+        std::cout << "  " << config.output_dir << "/" << prefix << "_range.csv" << std::endl;
+    }
+    if (csv_stats.satvis_rows > 0) {
+        std::cout << "  " << config.output_dir << "/" << prefix << "_satvis.csv" << std::endl;
+    }
+    if (csv_stats.satvis2_rows > 0) {
+        std::cout << "  " << config.output_dir << "/" << prefix << "_satvis2.csv" << std::endl;
+    }
+    if (csv_stats.bestpos_rows > 0) {
+        std::cout << "  " << config.output_dir << "/" << prefix << "_bestpos.csv" << std::endl;
+    }
+    if (csv_stats.range_rows == 0 && csv_stats.satvis_rows == 0 &&
+        csv_stats.satvis2_rows == 0 && csv_stats.bestpos_rows == 0) {
+        std::cout << "  (无数据，未创建任何CSV文件)" << std::endl;
+    }
 
     return stats.total_frames > 0;
 }
