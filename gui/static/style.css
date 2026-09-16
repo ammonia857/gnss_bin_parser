@@ -26,6 +26,12 @@ body {
 .hidden { display: none !important; }
 .muted { color: var(--muted); font-weight: 400; }
 
+/* ---------- 连接状态指示 ---------- */
+.conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--muted); }
+.dot.ok { background: var(--ok); box-shadow: 0 0 6px rgba(46, 165, 107, .8); }
+.dot.bad { background: var(--err); box-shadow: 0 0 6px rgba(207, 75, 75, .8); }
+
 /* ---------- 工具条 ---------- */
 .toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px;

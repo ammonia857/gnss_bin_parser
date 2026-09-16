@@ -33,10 +33,12 @@ class ServerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.td = tempfile.TemporaryDirectory()
-        root = Path(cls.td.name)
-        (root / "gui" / "static").mkdir(parents=True)
-        (root / "gui" / "static" / "index.html").write_text("<html>ok</html>", encoding="utf-8")
-        cls.srv, cls.port = create_server(root, port=0, engine_cmd=[sys.executable, FAKE])
+        cls.root = Path(cls.td.name)
+        (cls.root / "gui" / "static").mkdir(parents=True)
+        (cls.root / "gui" / "static" / "index.html").write_text("<html>ok</html>", encoding="utf-8")
+        cls.state_path = cls.root / "gui" / "state.json"
+        cls.srv, cls.port = create_server(cls.root, port=0, engine_cmd=[sys.executable, FAKE],
+                                          state_path=cls.state_path)
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.port}"
 
@@ -149,6 +151,26 @@ class ServerTest(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             http("POST", f"{self.base}/api/jobs/{jid}/retry")
         self.assertEqual(ctx.exception.code, 409)
+
+    def test_second_instance_moves_to_next_port(self):
+        """回归：端口已被占用时必须顺延到下一个端口。
+
+        Windows 的 SO_REUSEADDR 允许抢占已监听端口，若不关掉，第二个实例会绑到同一
+        端口并与之争抢连接（队列忽然变空、任务串台），顺延逻辑形同虚设。
+        """
+        srv2, port2 = create_server(self.root, port=self.port, engine_cmd=[sys.executable, FAKE],
+                                    state_path=self.state_path)
+        # 注意：必须先 serve_forever 才能调 shutdown()——socketserver 的 shutdown() 会等
+        # serve_forever 的循环事件，未启动时永久阻塞（本测试第一版就踩了这个坑）。
+        threading.Thread(target=srv2.serve_forever, daemon=True).start()
+        try:
+            self.assertNotEqual(port2, self.port, "第二个实例不得复用已占用的端口")
+            with urllib.request.urlopen(f"http://127.0.0.1:{port2}/api/jobs", timeout=10) as resp:
+                self.assertEqual(resp.status, 200)
+        finally:
+            srv2.ctx.queue.stop()
+            srv2.shutdown()
+            srv2.server_close()
 
     def test_client_abort_does_not_print_traceback(self):
         """回归：浏览器关掉 keep-alive 连接时，控制台不得刷出 ConnectionResetError 堆栈。

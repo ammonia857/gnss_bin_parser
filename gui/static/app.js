@@ -31,6 +31,8 @@ var state = {
   summary: null,          // 当前选中任务的概览
   summaryFor: null,       // 概览对应的任务 id
   summaryLoading: false,
+  summaryError: "",       // 统计 CSV 失败原因（界面上给"重新统计"入口）
+  connected: true,        // 与本地服务的连接状态
   uploads: {}             // 上传中的文件：name -> 0..1
 };
 
@@ -66,32 +68,100 @@ function el(tag, cls, text) {
   return node;
 }
 
-/* ---------- 提示条 ---------- */
+/* ---------- 提示条与连接状态 ---------- */
 
 var bannerTimer = null;
-function showBanner(text, warn) {
+function showBanner(text, warn, sticky) {
   var box = $("banner");
   box.textContent = text;
   box.className = "banner" + (warn ? " warn" : "");
-  if (bannerTimer) clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(function () { box.className = "banner hidden"; }, warn ? 8000 : 12000);
+  if (bannerTimer) { clearTimeout(bannerTimer); bannerTimer = null; }
+  if (!sticky) {
+    bannerTimer = setTimeout(function () { box.className = "banner hidden"; }, warn ? 8000 : 12000);
+  }
+}
+
+function hideBanner() {
+  if (bannerTimer) { clearTimeout(bannerTimer); bannerTimer = null; }
+  $("banner").className = "banner hidden";
+}
+
+var RECONNECT_HINT = "界面与本地服务失去连接。请看看那个黑色启动窗口是否还开着；"
+  + "若已关闭，重新双击 start_gui.bat，本页会自动恢复（也可以直接按 F5 刷新）。";
+
+function setConnected(ok, detail) {
+  if (state.connected === ok) return;
+  state.connected = ok;
+  $("conn-dot").className = "dot " + (ok ? "ok" : "bad");
+  $("conn-text").textContent = ok ? "已连接" : "未连接";
+  if (ok) {
+    hideBanner();
+  } else {
+    showBanner(detail ? (RECONNECT_HINT + "（" + detail + "）") : RECONNECT_HINT, true, true);
+    startReconnectLoop();
+  }
+}
+
+/* 断线后每 3 秒探一次 /api/jobs：服务一旦重新起来，页面自动恢复，无需手动刷新 */
+var reconnectTimer = null;
+function startReconnectLoop() {
+  if (reconnectTimer) return;
+  reconnectTimer = setInterval(function () {
+    if (state.connected) return;
+    request("GET", API.jobs, undefined, 8000).then(function (data) {
+      state.jobs = (data && data.jobs) || [];
+      renderQueue();
+      renderDetail();
+      updateStartButton();
+      var job = state.selectedId ? jobById(state.selectedId) : null;
+      if (job && job.status === "done" && summaryJobId() !== job.id) {
+        loadSummary(job.id);                 // 之前没统计成功的，重连后补上
+      }
+    }).catch(function () { /* 服务还没起来：下个周期再试 */ });
+  }, 3000);
 }
 
 /* ---------- HTTP ---------- */
 
-function request(method, url, body) {
+var DEFAULT_TIMEOUT = 20000;
+var SUMMARY_TIMEOUT = 180000;               // 几百 MB 的 CSV 统计要几十秒
+
+function describeNetworkError(err, timeoutMs) {
+  if (err && (err.name === "AbortError" || err.name === "TimeoutError")) {
+    return "请求超时（" + Math.round(timeoutMs / 1000) + " 秒无响应）";
+  }
+  return "无法连接本地服务（" + ((err && err.message) || "网络错误") + "）";
+}
+
+function request(method, url, body, timeoutMs) {
+  var limit = timeoutMs || DEFAULT_TIMEOUT;
   var opts = { method: method, headers: {} };
+  var controller = null, timer = null;
+  if (typeof AbortController !== "undefined") {
+    controller = new AbortController();
+    opts.signal = controller.signal;
+    timer = setTimeout(function () { controller.abort(); }, limit);
+  }
   if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
+  var clear = function () { if (timer) { clearTimeout(timer); timer = null; } };
+
   return fetch(url, opts).then(function (resp) {
+    clear();
+    if (resp.ok) setConnected(true);
     return resp.text().then(function (text) {
       var data = {};
       try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { error: text }; }
       if (!resp.ok) throw new Error(data.error || (resp.status + " " + resp.statusText));
       return data;
     });
+  }, function (err) {                        // 只有网络层/超时才会进这里；HTTP 错误码保持原样
+    clear();
+    var msg = describeNetworkError(err, limit);
+    setConnected(false, msg);
+    throw new Error(msg);
   });
 }
 
@@ -119,12 +189,31 @@ function saveSettings(patch) {
 
 /* ---------- 任务列表 ---------- */
 
+/* 刷新后原本选中的任务会丢；自动选最近一个，省得每次都要手点 */
+function autoSelectJob() {
+  if (state.selectedId && jobById(state.selectedId)) return;
+  state.selectedId = state.jobs.length ? state.jobs[state.jobs.length - 1].id : null;
+  state.summary = null; state.summaryFor = null; state.summaryError = "";
+}
+
+/* 已选任务是"完成"态但还没统计过 CSV 时，自动补一次统计（失败过的等用户点「重新统计」） */
+function autoLoadSummary() {
+  var job = state.selectedId ? jobById(state.selectedId) : null;
+  if (job && job.status === "done" && summaryJobId() !== job.id
+      && !state.summaryLoading && !state.summaryError) {
+    state.summary = null; state.summaryFor = null;
+    loadSummary(job.id);
+  }
+}
+
 function refreshJobs() {
   return request("GET", API.jobs).then(function (data) {
     state.jobs = (data && data.jobs) || [];
+    autoSelectJob();
     renderQueue();
     renderDetail();
     updateStartButton();
+    autoLoadSummary();
   }).catch(function (e) { showBanner("读取任务列表失败：" + e.message); });
 }
 
@@ -217,7 +306,9 @@ function updateStartButton() {
 
 function selectJob(id) {
   state.selectedId = id;
-  if (state.summaryFor !== id) { state.summary = null; state.summaryFor = null; }
+  if (state.summaryFor !== id) {
+    state.summary = null; state.summaryFor = null; state.summaryError = "";
+  }
   renderQueue();
   renderDetail();
   var job = jobById(id);
@@ -267,6 +358,12 @@ function renderDetail() {
 function renderSystems() {
   var box = $("system-bars");
   box.innerHTML = "";
+  $("btn-reload-summary").className = "btn small ghost"
+    + (state.summaryError || state.summary ? "" : " hidden");
+  if (state.summaryError) {
+    box.appendChild(el("div", "empty", "统计失败：" + state.summaryError + "（可点上方「重新统计」再试）"));
+    return;
+  }
   var summary = state.summary;
   var datasets = (summary && summary.datasets) || {};
   var ds = datasets.range || datasets.satvis2 || null;
@@ -311,12 +408,19 @@ function renderFiles() {
   });
 }
 
+function summaryJobId() {
+  return state.summaryFor;
+}
+
 function loadSummary(id) {
   if (state.summaryLoading) return;
   state.summaryLoading = true;
+  state.summaryError = "";
   renderSystems();
-  request("GET", API.summary(id)).then(function (data) {
+  $("btn-reload-summary").disabled = true;
+  request("GET", API.summary(id), undefined, SUMMARY_TIMEOUT).then(function (data) {
     state.summaryLoading = false;
+    $("btn-reload-summary").disabled = false;
     if (state.selectedId !== id) return;      // 期间切换了任务：丢弃过期结果
     state.summary = data;
     state.summaryFor = id;
@@ -324,7 +428,10 @@ function loadSummary(id) {
     renderFiles();
   }).catch(function (e) {
     state.summaryLoading = false;
-    showBanner("统计 CSV 失败：" + e.message);
+    $("btn-reload-summary").disabled = false;
+    if (state.selectedId !== id) return;
+    state.summaryError = e.message;           // 卡片区显示原因 + 「重新统计」按钮，不留假加载态
+    renderSystems();
   });
 }
 
@@ -428,6 +535,10 @@ function initDrag() {
 function connectEvents() {
   if (typeof EventSource === "undefined") return;      // 老浏览器：退化为手动刷新
   var es = new EventSource(API.events);
+  es.onopen = function () {                            // 通道（重）连成功：校准一次全量状态
+    setConnected(true);
+    refreshJobs();
+  };
   es.onmessage = function (ev) {
     var data;
     try { data = JSON.parse(ev.data); } catch (e) { return; }
@@ -437,7 +548,7 @@ function connectEvents() {
         state.settings = data.settings;
         $("auto-start").checked = !!data.settings.autoStart;
       }
-      renderQueue(); renderDetail(); updateStartButton();
+      renderQueue(); renderDetail(); updateStartButton(); autoLoadSummary();
     } else if (data.type === "job") {
       var job = data.job;
       var replaced = false;
@@ -448,8 +559,8 @@ function connectEvents() {
       renderQueue();
       updateStartButton();
       if (job.id === state.selectedId) renderDetail();
-      if (job.status === "done" && job.id === state.selectedId) {
-        state.summary = null; state.summaryFor = null;
+      if (job.status === "done" && job.id === state.selectedId && summaryJobId() !== job.id) {
+        state.summary = null; state.summaryFor = null; state.summaryError = "";
         loadSummary(job.id);
       }
     } else if (data.type === "progress") {
@@ -462,7 +573,14 @@ function connectEvents() {
       }
     }
   };
-  es.onerror = function () { refreshJobs(); };          // EventSource 会自动重连，这里只做一次校准
+  // SSE 断开时既要显示"未连接"，也要做一次 HTTP 校准（HTTP 若还通就说明只是事件通道抖动）
+  es.onerror = function () {
+    if (!state.connected) return;
+    request("GET", API.jobs, undefined, 8000).then(function (data) {
+      state.jobs = (data && data.jobs) || [];
+      renderQueue(); renderDetail(); updateStartButton();
+    }).catch(function () { /* request() 内部已把状态标为未连接并给出提示 */ });
+  };
 }
 
 /* ---------- 绑定 ---------- */
@@ -471,6 +589,11 @@ function bindControls() {
   $("btn-save-engine").addEventListener("click", function () {
     saveSettings({ enginePath: $("engine-path").value.trim() })
       .then(function () { showBanner("引擎路径已保存", true); });
+  });
+  $("btn-reload-summary").addEventListener("click", function () {
+    if (!state.selectedId) return;
+    state.summary = null; state.summaryFor = null; state.summaryError = "";
+    loadSummary(state.selectedId);
   });
   $("btn-redetect").addEventListener("click", function () {
     $("engine-path").value = "";

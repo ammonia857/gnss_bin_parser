@@ -9,6 +9,9 @@
 <body>
   <header class="toolbar">
     <div class="brand">GNSS BIN 解析</div>
+    <span id="conn" class="conn" title="与本地服务的连接状态；服务窗口被关闭后会显示未连接并自动重试">
+      <i id="conn-dot" class="dot ok"></i><span id="conn-text">已连接</span>
+    </span>
 
     <label class="field">
       <span>引擎</span>
@@ -48,7 +51,7 @@
       <div id="detail-empty" class="empty">选中左侧任务查看统计与输出文件</div>
       <div id="detail-body" class="hidden">
         <div class="cards" id="stat-cards"></div>
-        <h3>星座分布</h3>
+        <h3>星座分布 <button id="btn-reload-summary" class="btn small ghost hidden">重新统计</button></h3>
         <div id="system-bars" class="bars"></div>
         <h3>输出文件</h3>
         <ul id="file-list" class="file-list"></ul>

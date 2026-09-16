@@ -8,9 +8,35 @@
 - :meth:`NativePicker.pick_files` / :meth:`pick_folder`：供 HTTP 线程调用（阻塞等待结果，带超时）；
 - ``dialog_files`` / ``dialog_folder`` 可注入假实现，便于在无 UI 的测试里验证请求/响应管线。
 """
+import contextlib
+import os
 import queue
 import threading
 from pathlib import Path
+
+
+@contextlib.contextmanager
+def _silence_c_stderr():
+    """临时把文件描述符 2 指向 devnull，吞掉 C 库直接写 stderr 的噪声。
+
+    为什么需要：Tk 在**第一次 update() 时**才解码主题 PNG，libpng 会对这些图刷 39 行
+    ``libpng warning: iCCP: known incorrect sRGB profile``。这些警告来自 C 层、直接写 fd 2，
+    用 ``contextlib.redirect_stderr`` 拦不住（实测：不加处理时启动即 39 行），而用户看到的
+    是一启动就满屏"报错"，会以为程序坏了。只罩住 Tk 初始化那几次 update()，之后照常显示。
+    """
+    try:
+        saved = os.dup(2)
+    except OSError:                     # 没有可用的 stderr（极简环境）：直接跳过
+        yield
+        return
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    try:
+        os.dup2(devnull, 2)
+        yield
+    finally:
+        os.dup2(saved, 2)
+        os.close(devnull)
+        os.close(saved)
 
 
 def _real_pick_files() -> list[str]:
@@ -47,8 +73,12 @@ class NativePicker:
         """在主线程常驻：创建隐藏 Tk 根窗口，循环处理请求直到 :meth:`stop`。"""
         import tkinter as tk
 
-        root = tk.Tk()
-        root.withdraw()
+        with _silence_c_stderr():
+            root = tk.Tk()
+            root.withdraw()
+            # 主题 PNG 在最初几次 update() 里才被解码，噪声集中在这几帧（实测共 39 行）
+            for _ in range(10):
+                root.update()
         self._root = root
         self._stop.clear()
         try:

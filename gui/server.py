@@ -109,6 +109,13 @@ class _QuietHTTPServer(ThreadingHTTPServer):
     控制台窗口里会看到大段报错，误以为程序坏了；真正的服务器错误仍然照常打印。
     """
 
+    # Windows 上 SO_REUSEADDR 的语义与 POSIX 不同：它允许**抢占**已在监听的端口。
+    # 后果很隐蔽——开第二个界面实例时 bind 会"成功"，两个服务监听同一端口，
+    # 浏览器/SSE 的请求随机落到其中一个（表现为任务队列忽然变空、"打开"失败），
+    # 而 create_server 里"端口占用就顺延"的循环也永远不会触发。
+    # 关掉它，让 bind 老老实实失败，顺延逻辑才真的生效。
+    allow_reuse_address = False
+
     daemon_threads = True
 
     def handle_error(self, request, client_address) -> None:
