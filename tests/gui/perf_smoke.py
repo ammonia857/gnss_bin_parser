@@ -46,10 +46,19 @@ def memory_peak_mb() -> float | None:
                     ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
                     ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
 
+    # 必须显式声明参数/返回类型：句柄在 64 位下是 8 字节，交给 ctypes 默认的 c_int 会被截断，
+    # GetProcessMemoryInfo 于是失败（第一次实现就踩了这个坑）。
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE,
+                                           ctypes.POINTER(PROCESS_MEMORY_COUNTERS),
+                                           wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+
     counters = PROCESS_MEMORY_COUNTERS()
     counters.cb = ctypes.sizeof(counters)
-    handle = ctypes.windll.kernel32.GetCurrentProcess()
-    if not ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+    if not psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
         return None
     return round(counters.PeakWorkingSetSize / 1048576, 1)
 
