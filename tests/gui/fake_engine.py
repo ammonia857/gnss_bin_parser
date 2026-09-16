@@ -60,7 +60,7 @@ def main() -> int:
                 f.write("2215,1000,0,16,30.5,114.35,39.6,-14.4,0.9,0.9,1.9,20,18\n")
         files.append(path)
 
-    print("成功解析帧数: 8", flush=True)
+    print("成功解析帧数: 5", flush=True)     # = 2 RANGE + 0 SATVIS + 2 SATVIS2 + 1 BESTPOS（与分项自洽）
     print("  - RANGE观测帧:     2", flush=True)
     print("  - SATVIS可见性帧:  0", flush=True)
     print("  - SATVIS2可见性帧: 2", flush=True)
