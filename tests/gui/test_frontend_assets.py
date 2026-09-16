@@ -73,7 +73,9 @@ class StaticServingTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.srv, cls.port = create_server(REPO, port=0, engine_cmd=["python", "-c", ""])
+        cls.td = tempfile.TemporaryDirectory(prefix="gnss_static_")
+        cls.srv, cls.port = create_server(REPO, port=0, engine_cmd=["python", "-c", ""],
+                                          state_path=Path(cls.td.name) / "state.json")
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.port}"
 
@@ -82,6 +84,7 @@ class StaticServingTest(unittest.TestCase):
         cls.srv.ctx.queue.stop()
         cls.srv.shutdown()
         cls.srv.server_close()
+        cls.td.cleanup()
 
     def fetch(self, path):
         with urllib.request.urlopen(self.base + path, timeout=10) as resp:

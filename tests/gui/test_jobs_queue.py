@@ -100,6 +100,30 @@ class QueueTest(unittest.TestCase):
         self.assertEqual(q2.recover_interrupted(), 1)
         self.assertEqual(q2.snapshot()[0]["status"], "interrupted")
 
+    def test_auto_start_off_holds_jobs_until_start_pending(self):
+        """回归：关掉 autoStart 后紧接着入队，任务**不得**被执行（曾在设置生效前的阻塞等待里漏跑）。"""
+        self.state.set_settings({"autoStart": False})
+        self.q.enqueue([self._bin("hold.bin")], str(self.root / "out_hold"))
+        time.sleep(0.6)                                  # 远大于 worker 轮询间隔
+        self.assertEqual(self.q.snapshot()[0]["status"], "queued")
+
+        self.assertEqual(self.q.start_pending(), 1)
+        self._wait()
+        self.assertEqual(self.q.snapshot()[0]["status"], "done")
+
+    def test_prefix_collision_with_queued_jobs(self):
+        """回归：两次连续入队的同名输入必须拿到不同前缀，否则第二个结果覆盖第一个。"""
+        self.state.set_settings({"autoStart": False})     # 都停在排队态，文件系统里还没有 CSV
+        first, second = self.q.enqueue([self._bin("same.bin")], str(self.root / "out_same")), \
+            self.q.enqueue([self._bin("same.bin")], str(self.root / "out_same"))
+        self.assertEqual(first[0]["prefix"], "gnss")
+        self.assertEqual(second[0]["prefix"], "gnss-2")
+        self.q.start_pending()
+        self._wait()
+        out = self.root / "out_same"
+        self.assertTrue((out / "gnss_same_range.csv").exists())
+        self.assertTrue((out / "gnss-2_same_range.csv").exists())
+
 
 class PreflightTest(unittest.TestCase):
     """预检与错误路径（不需要启动工作线程）。"""
