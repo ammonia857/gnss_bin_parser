@@ -1,0 +1,122 @@
+/* GNSS 解析界面样式：单页三区（工具条 / 左侧队列 / 右侧详情），中文界面，无第三方依赖 */
+:root {
+  --bg: #0f172a;
+  --surface: #16213a;
+  --surface-2: #1d2b48;
+  --border: #2b3a5c;
+  --text: #e6ecf7;
+  --muted: #93a3bf;
+  --accent: #1e3a5f;
+  --accent-2: #2f6fb5;
+  --ok: #2ea56b;
+  --warn: #d08a1e;
+  --err: #cf4b4b;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.6 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+}
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); font-weight: 400; }
+
+/* ---------- 工具条 ---------- */
+.toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 5;
+}
+.brand { font-weight: 700; letter-spacing: .5px; color: #cfe0ff; margin-right: 6px; }
+.field { display: flex; align-items: center; gap: 6px; }
+.field.grow { flex: 1 1 320px; }
+.field > span { color: var(--muted); font-size: 12px; }
+.field input[type="text"] {
+  flex: 1 1 auto; min-width: 180px; padding: 6px 9px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.switch { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+
+.btn {
+  padding: 7px 13px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); cursor: pointer; font-size: 13px;
+}
+.btn:hover { border-color: var(--accent-2); }
+.btn.small { padding: 5px 9px; font-size: 12px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-2); }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---------- 提示条 ---------- */
+.banner {
+  margin: 10px 14px 0; padding: 9px 12px; border-radius: var(--radius);
+  background: rgba(207, 75, 75, .15); border: 1px solid var(--err); color: #ffd9d9;
+}
+.banner.warn { background: rgba(208, 138, 30, .15); border-color: var(--warn); color: #ffe9c2; }
+
+/* ---------- 布局 ---------- */
+.layout { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 14px; padding: 14px; }
+@media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+.queue, .detail {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px; min-height: 240px;
+}
+.panel-title { font-weight: 600; margin-bottom: 10px; }
+.empty { color: var(--muted); padding: 18px 6px; }
+
+/* ---------- 任务列表 ---------- */
+.job-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.job {
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 10px;
+  background: var(--surface-2); cursor: pointer;
+}
+.job.selected { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2) inset; }
+.job-head { display: flex; align-items: center; gap: 8px; }
+.job-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-size { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.badge { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); }
+.badge.queued { color: var(--muted); }
+.badge.running { color: #cfe0ff; border-color: var(--accent-2); }
+.badge.done { color: #c8f2d8; border-color: var(--ok); }
+.badge.failed { color: #ffd9d9; border-color: var(--err); }
+.badge.cancelled, .badge.interrupted { color: #ffe9c2; border-color: var(--warn); }
+.progress { height: 6px; border-radius: 3px; background: #0d1526; margin: 7px 0 4px; overflow: hidden; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--accent-2); transition: width .2s; }
+.job-foot { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.job-foot .spacer { flex: 1 1 auto; }
+.job-actions button { font-size: 12px; padding: 2px 8px; }
+
+/* ---------- 详情 ---------- */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 11px; }
+.card .k { color: var(--muted); font-size: 12px; }
+.card .v { font-size: 18px; font-weight: 600; }
+
+.bars { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.bar-row { display: grid; grid-template-columns: 96px 1fr 88px; align-items: center; gap: 8px; font-size: 12px; }
+.bar-track { height: 12px; border-radius: 6px; background: #0d1526; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent-2); }
+
+.file-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.file-list li { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 9px; font-size: 12px; }
+.file-list .name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.job-message { margin-top: 12px; padding: 8px 10px; border-radius: var(--radius); background: rgba(207, 75, 75, .12); border: 1px solid var(--err); color: #ffd9d9; white-space: pre-wrap; }
+
+/* ---------- 拖拽遮罩与上传进度 ---------- */
+.drop-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, .82);
+  display: flex; align-items: center; justify-content: center; z-index: 20;
+}
+.drop-box { border: 2px dashed var(--accent-2); border-radius: 14px; padding: 26px 34px; text-align: center; max-width: 620px; }
+.drop-box p { color: var(--muted); font-size: 13px; }
+
+.uploads { position: fixed; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; z-index: 15; }
+.upload-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 10px; font-size: 12px; min-width: 240px; }

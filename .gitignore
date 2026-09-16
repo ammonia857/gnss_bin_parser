@@ -35,6 +35,13 @@ Makefile
 # ===== 生成的结果数据 =====
 output/
 output*/
+parsed_output/
+
+# ===== Python（界面与测试）=====
+__pycache__/
+*.py[cod]
+gui/state.json
+gui/state.json.tmp
 
 # ===== 编辑器 =====
 .vscode/
