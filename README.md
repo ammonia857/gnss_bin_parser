@@ -57,19 +57,35 @@ Windows（VS 自带 cmake）示例：
 gnss_parser -i data.bin                          # 单文件解析，输出到 ./output
 gnss_parser -i data.bin -o ./result              # 指定输出目录
 gnss_parser -d ./bin_folder -o ./result          # 批量解析文件夹内所有 .bin
-gnss_parser -i data.bin -p myprefix              # 自定义输出文件前缀
+gnss_parser -i data.bin -p myprefix              # 自定义输出文件名前缀（默认 gnss）
 gnss_parser -v                                   # 详细输出模式
 gnss_parser --help                               # 显示帮助
 ```
+
+输出文件名规则（**实测**）：`{前缀}_{输入文件主名}_{类型}.csv`，前缀由 `-p` 给出、默认 `gnss`。
+例如 `gnss_parser -i flight01.bin` → `gnss_flight01_range.csv`。
 
 输出文件（**惰性创建**：只有实际解析到该类数据才会创建并写表头）：
 
 | 文件 | 内容 |
 | --- | --- |
-| `{prefix}_range.csv` | RANGE 观测数据 |
-| `{prefix}_satvis2.csv` | SATVIS2 卫星可见性扩展 |
-| `{prefix}_bestpos.csv` | BESTPOS 定位结果 |
-| `{prefix}_satvis.csv` | SATVIS 可见性（**OEM7 无此日志，实际不会产生**；导出器仍保留该接口供外部调用） |
+| `{前缀}_{主名}_range.csv` | RANGE 观测数据 |
+| `{前缀}_{主名}_satvis2.csv` | SATVIS2 卫星可见性扩展 |
+| `{前缀}_{主名}_bestpos.csv` | BESTPOS 定位结果 |
+| `{前缀}_{主名}_satvis.csv` | SATVIS 可见性（**OEM7 无此日志，实际不会产生**；导出器仍保留该接口供外部调用） |
+
+## 图形界面（本地网页版）
+
+不想敲命令行时，用内置的本地网页界面：**双击 `gui\start_gui.bat`**（或仓库根目录执行 `python -m gui.server`），
+浏览器会自动打开 `http://127.0.0.1:8765/`（端口占用则自动 +1，最多试到 8780）。
+
+- 只监听 `127.0.0.1`，不对外网开放；**只用 Python 标准库**，无需 `pip install`。
+- 顶部选引擎与输出目录 → 「选择 BIN 文件…」（原生对话框、零拷贝）或直接把 `.bin` 拖进页面。
+- 左侧任务队列带实时进度与「取消 / 重试 / 打开目录 / 删除」，右侧显示帧数、各类型行数、CRC 错误、耗时、吞吐、星座分布与 CSV 清单。
+- 队列**串行**执行（一次一个子进程），避免几百 MB 数据并行解析时抢磁盘。
+- 设置与任务历史保存在 `gui/state.json`（已 gitignore），删除即恢复默认。
+
+细节、HTTP 接口与排错见 [`gui/README.md`](gui/README.md)。
 
 ## CSV 列定义
 
@@ -178,6 +194,15 @@ include/            # 头文件
 src/                # 实现文件
   main.cpp          #   gnss_parser 命令行入口
   generate_sample.cpp # gnss_gen_sample 样本生成器（按官方位域/枚举生成）
+gui/                # 本地网页界面（Python 标准库，无第三方依赖）
+  server.py         #   HTTP 路由、SSE 广播、上传、结果聚合出口
+  jobs.py           #   串行任务队列、引擎探测、stdout 进度/统计解析
+  aggregate.py      #   输出 CSV 流式统计与分页读取
+  native_picker.py  #   tkinter 原生文件/目录对话框桥
+  state.py          #   gui/state.json 设置与任务持久化
+  static/           #   零构建前端（index.html / app.js / style.css）
+  start_gui.bat     #   Windows 双击启动
 tests/
-  regression.py     #   防回归测试
+  regression.py     #   防回归测试（引擎侧）
+  gui/              #   界面侧测试（含真实引擎端到端 test_e2e.py）
 ```
