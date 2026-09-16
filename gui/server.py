@@ -99,9 +99,15 @@ def _dataset_kind(name: str) -> str:
     return stem
 
 
-def create_server(repo_root, port: int = 8765, engine_cmd=None, picker=None):
-    """创建并返回 ``(ThreadingHTTPServer, actual_port)``；``port=0`` 时由系统分配。"""
-    ctx = Context(Path(repo_root), _load_state(Path(repo_root)), engine_cmd=engine_cmd, picker=picker)
+def create_server(repo_root, port: int = 8765, engine_cmd=None, picker=None, state_path=None):
+    """创建并返回 ``(ThreadingHTTPServer, actual_port)``；``port=0`` 时由系统分配。
+
+    ``state_path`` 用于把设置/任务历史落到别处（默认 ``<repo>/gui/state.json``）：
+    测试据此拿到互不干扰的干净状态，不必污染真实仓库里的用户数据。
+    """
+    root = Path(repo_root)
+    ctx = Context(root, _load_state(state_path or (root / "gui" / "state.json")),
+                  engine_cmd=engine_cmd, picker=picker)
     handler = _make_handler(ctx)
     candidates = [0] if port == 0 else list(range(port, port + _MAX_PORT_TRIES))
     last_error = None
@@ -118,8 +124,8 @@ def create_server(repo_root, port: int = 8765, engine_cmd=None, picker=None):
     raise OSError(f"无法在 {port}~{port + _MAX_PORT_TRIES - 1} 范围内监听端口: {last_error}")
 
 
-def _load_state(repo_root: Path) -> State:
-    state = State(repo_root / "gui" / "state.json")
+def _load_state(state_path: Path) -> State:
+    state = State(state_path)
     state.load()
     return state
 

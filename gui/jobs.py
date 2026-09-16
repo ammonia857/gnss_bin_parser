@@ -76,16 +76,21 @@ _CSV_KINDS = ("range", "satvis", "satvis2", "bestpos")
 DEFAULT_PREFIX = "gnss"
 
 
-def unique_prefix(output_dir: Path, stem: str) -> str:
+def unique_prefix(output_dir: Path, stem: str, taken=()) -> str:
     """返回未被占用的输出前缀（该值直接作为 -p 传给引擎）。
 
     真引擎实际产出 ``{prefix}_{stem}_{kind}.csv``（prefix = -p 值 + '_' + 输入主名），
     因此判重必须带上原始主名 ``stem``；``stem`` 应为输入文件的**原始主名**
     （``Path(input).stem``），不要传 sanitize 后的名字。
+
+    ``taken`` 是**已在队列里但还没落盘**的同名文件集合：只查文件系统会让两次连续入队的
+    同名输入拿到同一个前缀，第二个任务的结果覆盖第一个（见 Task 10 端到端测试）。
     """
     out = Path(output_dir)
+    taken = set(taken)
     candidate, n = DEFAULT_PREFIX, 1
-    while any((out / f"{candidate}_{stem}_{kind}.csv").exists() for kind in _CSV_KINDS):
+    while (any((out / f"{candidate}_{stem}_{kind}.csv").exists() for kind in _CSV_KINDS)
+           or any(f"{candidate}_{stem}_{kind}.csv" in taken for kind in _CSV_KINDS)):
         n += 1
         candidate = f"{DEFAULT_PREFIX}-{n}"
     return candidate
@@ -113,7 +118,6 @@ def detect_engine(repo_root: Path, override: str = "") -> str | None:
 
 import copy
 import glob as _glob
-import queue as _queue
 import subprocess
 import threading
 import time
@@ -159,7 +163,6 @@ class JobQueue:
         self._engine_cmd = list(engine_cmd) if engine_cmd else None
         self._lock = threading.RLock()
         self._jobs = [dict(j) for j in state.jobs]
-        self._pending = _queue.Queue()
         self._stop = threading.Event()
         self._worker = None
         self._proc = None
@@ -230,8 +233,7 @@ class JobQueue:
                 job["status"] = "failed"
                 job["message"] = problem
                 job["finishedAt"] = _now()
-            else:
-                self._pending.put(job["id"])
+            # 状态为 queued 的任务由工作线程按列表顺序领取，无需另建待办队列
             with self._lock:
                 self._jobs.append(job)
             created.append(dict(job))
@@ -268,7 +270,8 @@ class JobQueue:
             job = self._find(job_id)
             if job is None or job["status"] not in ("failed", "cancelled", "interrupted"):
                 return False
-            job["prefix"] = unique_prefix(Path(job["outputDir"]), Path(job["inputPath"]).stem)
+            job["prefix"] = unique_prefix(Path(job["outputDir"]), Path(job["inputPath"]).stem,
+                                          self._taken_names(job))
             job["status"] = "queued"
             job["progress"] = 0.0
             job["message"] = ""
@@ -276,7 +279,6 @@ class JobQueue:
             job["queuedAt"] = _now()
             job["startedAt"] = ""
             job["finishedAt"] = ""
-        self._pending.put(job_id)
         self._emit_job(job)
         self._save(force=True)
         return True
@@ -307,20 +309,23 @@ class JobQueue:
     # ---------- 内部：任务执行 ----------
 
     def _worker_loop(self) -> None:
+        """串行取活：**在同一把锁里**判定"是否放行"与"取哪个任务"，顺序即列表顺序（自上而下）。
+
+        早期实现把放行判定放在阻塞等待任务队列之前，导致"关掉『拖入即开始』后刚入队的任务
+        仍会执行"（判定通过后 worker 已阻塞在取任务上，设置变更无法阻止它）。改为直接扫描
+        任务列表后，放行开关与任务选取是原子的，也不再有"待办 id 队列与任务列表不一致"的问题
+        （删除/清空任务后残留 id 的旧坑一并消失）。
+        """
         while not self._stop.is_set():
-            auto = bool(self.state.settings.get("autoStart", True)) or self._run_requested
-            if not auto:
-                time.sleep(0.1)
-                continue
-            try:
-                job_id = self._pending.get(timeout=0.2)
-            except _queue.Empty:
-                if self._pending.unfinished_tasks == 0:
-                    self._run_requested = False
-                continue
+            job = None
             with self._lock:
-                job = self._find(job_id)
-            if job is None or job["status"] != "queued":
+                allowed = bool(self.state.settings.get("autoStart", True)) or self._run_requested
+                if allowed:
+                    job = next((j for j in self._jobs if j["status"] == "queued"), None)
+                if job is None:
+                    self._run_requested = False
+            if job is None:
+                time.sleep(0.05)
                 continue
             self._run_job(job)
 
@@ -438,6 +443,17 @@ class JobQueue:
 
     # ---------- 内部：任务装配与状态 ----------
 
+    def _taken_names(self, exclude: dict | None = None) -> set:
+        """队列里其它任务**将要产出**的 CSV 文件名集合（用于前缀判重，避免互相覆盖）。"""
+        taken = set()
+        for job in self._jobs:
+            if exclude is not None and job["id"] == exclude["id"]:
+                continue
+            stem = Path(job["inputPath"]).stem
+            for kind in _CSV_KINDS:
+                taken.add(f"{job['prefix']}_{stem}_{kind}.csv")
+        return taken
+
     def _make_job(self, path: Path, out_dir: Path, uploaded: bool) -> dict:
         self._seq += 1
         job_id = f"j{datetime.now():%Y%m%d%H%M%S}-{self._seq:03d}"
@@ -449,7 +465,7 @@ class JobQueue:
             "sizeBytes": size,
             "isUploaded": uploaded,
             "outputDir": str(out_dir),
-            "prefix": unique_prefix(out_dir, path.stem),
+            "prefix": unique_prefix(out_dir, path.stem, self._taken_names()),
             "status": "queued",
             "progress": 0.0,
             "message": "",

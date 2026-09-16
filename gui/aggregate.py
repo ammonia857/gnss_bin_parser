@@ -125,6 +125,10 @@ class SummaryCache:
         except OSError:
             pass
 
+    def clear(self) -> None:
+        """丢弃全部缓存（测试与排查用：验证"重新统计得到同样结果"）。"""
+        self._items.clear()
+
 
 def build_row_index(csv_path: Path, every: int = INDEX_EVERY) -> list[int]:
     """返回每 ``every`` 条数据行首行的**字节偏移**；``index[0]`` 是第一条数据行。"""
