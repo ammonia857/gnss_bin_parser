@@ -150,6 +150,26 @@ class ServerTest(unittest.TestCase):
             http("POST", f"{self.base}/api/jobs/{jid}/retry")
         self.assertEqual(ctx.exception.code, 409)
 
+    def test_client_abort_does_not_print_traceback(self):
+        """回归：浏览器关掉 keep-alive 连接时，控制台不得刷出 ConnectionResetError 堆栈。
+
+        （用户双击 start_gui.bat 起的控制台窗口里出现大段红色 traceback，会以为程序坏了。）
+        """
+        import contextlib
+        import io
+        import socket
+        import struct
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stderr(buffer):
+            sock = socket.create_connection(("127.0.0.1", self.port), timeout=5)
+            sock.sendall(b"GET /api/jobs HTTP/1.1\r\nHost: 127.0.0.1\r\n")   # 请求故意不完整
+            # SO_LINGER 0 → close() 直接发 RST，模拟浏览器强行断开
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            sock.close()
+            time.sleep(0.5)                                    # 留给服务端线程处理断开
+        self.assertEqual(buffer.getvalue(), "", "客户端断开不应产生任何 stderr 输出")
+
 
 if __name__ == "__main__":
     unittest.main()

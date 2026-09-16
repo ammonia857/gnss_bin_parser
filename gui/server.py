@@ -99,6 +99,24 @@ def _dataset_kind(name: str) -> str:
     return stem
 
 
+_CLIENT_ABORT_ERRORS = (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError)
+
+
+class _QuietHTTPServer(ThreadingHTTPServer):
+    """客户端中途断开（浏览器关闭 keep-alive 连接）不刷一屏红色堆栈。
+
+    socketserver 默认会把这类异常连同 traceback 打到 stderr，用户在双击启动的
+    控制台窗口里会看到大段报错，误以为程序坏了；真正的服务器错误仍然照常打印。
+    """
+
+    daemon_threads = True
+
+    def handle_error(self, request, client_address) -> None:
+        if isinstance(sys.exc_info()[1], _CLIENT_ABORT_ERRORS):
+            return
+        super().handle_error(request, client_address)
+
+
 def create_server(repo_root, port: int = 8765, engine_cmd=None, picker=None, state_path=None):
     """创建并返回 ``(ThreadingHTTPServer, actual_port)``；``port=0`` 时由系统分配。
 
@@ -113,12 +131,11 @@ def create_server(repo_root, port: int = 8765, engine_cmd=None, picker=None, sta
     last_error = None
     for candidate in candidates:
         try:
-            server = ThreadingHTTPServer(("127.0.0.1", candidate), handler)
+            server = _QuietHTTPServer(("127.0.0.1", candidate), handler)
         except OSError as exc:                      # 端口占用 → 试下一个
             last_error = exc
             continue
         server.ctx = ctx
-        server.daemon_threads = True
         ctx.queue.start()
         return server, server.server_address[1]
     raise OSError(f"无法在 {port}~{port + _MAX_PORT_TRIES - 1} 范围内监听端口: {last_error}")

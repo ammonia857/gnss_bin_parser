@@ -20,6 +20,16 @@ python -m gui.server --port 8800 --no-browser      # 指定端口 / 不自动开
 依赖：**Python 3.9+ 标准库**（`http.server`、`tkinter`、`json`…），无需 pip 安装任何东西。
 `tkinter` 缺失时界面仍可用，只是「选择文件/目录」按钮失效，可改用拖拽或手填路径。
 
+### 关于 `start_gui.bat`
+
+脚本会先按**自身所在位置**推算项目目录；算不出来时退回文件里写死的 `DEFAULT_ROOT`
+（本机为 `C:\Users\31743\Desktop\CC deepseek\gnss_bin_parser`）。因此把它复制到桌面、
+开始菜单等任何地方双击都能用；项目整体搬家后，改 `DEFAULT_ROOT` 那一行即可。
+
+> 注意：该文件必须保持**纯 ASCII**。`.bat` 里出现中文等多字节字符会让 cmd.exe 按字节偏移
+> 重新读取时错位，表现为控制台报 `'xxx' is not recognized as an internal or external command`。
+> 中文提示一律由 Python 侧打印（Python 在 Windows 控制台走 UTF-16 写屏，不受代码页影响）。
+
 ## 功能（P1）
 
 | 区域 | 能力 |

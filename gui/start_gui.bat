@@ -1,27 +1,81 @@
 @echo off
-rem 启动 GNSS 解析工具的本地网页界面：只依赖 Python 标准库，无第三方包。
-chcp 65001 >nul
-setlocal
-cd /d "%~dp0.."
+rem ===========================================================================
+rem  GNSS BIN parser - local web UI launcher
+rem
+rem  NOTE: keep this file ASCII-only. Non-ASCII text inside a .bat file makes
+rem  cmd.exe mis-parse lines (it re-reads the file by byte offset), which shows
+rem  up as "'xxx' is not recognized as an internal or external command".
+rem  Chinese messages are printed by the Python side instead.
+rem
+rem  The project folder is located automatically from this script's location.
+rem  If this file is copied elsewhere (e.g. onto the Desktop), DEFAULT_ROOT is
+rem  used as a fallback - so a desktop copy still works.
+rem ===========================================================================
+setlocal EnableExtensions
+title GNSS BIN parser - web UI
 
+set "DEFAULT_ROOT=C:\Users\31743\Desktop\CC deepseek\gnss_bin_parser"
+
+set "ROOT=%~dp0.."
+if not exist "%ROOT%\gui\server.py" set "ROOT=%DEFAULT_ROOT%"
+if not exist "%ROOT%\gui\server.py" goto :noproject
+
+pushd "%ROOT%"
+set "PYTHONPATH=%ROOT%"
+
+rem ---- find a Python interpreter -------------------------------------------
+set "PY=python"
 where python >nul 2>nul
-if errorlevel 1 (
-  echo [错误] 未找到 python，请先安装 Python 3.9+ 并勾选 "Add python.exe to PATH"。
-  pause
-  exit /b 1
-)
+if not errorlevel 1 goto :havepython
+where py >nul 2>nul
+if not errorlevel 1 goto :usepy
+goto :nopython
+:usepy
+set "PY=py"
+:havepython
 
-if not exist "build\Release\gnss_parser.exe" (
-  if not exist "build\gnss_parser.exe" (
-    echo [提示] 未找到 gnss_parser.exe：界面仍会启动，但需要你在顶部手动指定引擎路径，
-    echo        或先按 README 的「编译」一节生成 build\Release\gnss_parser.exe。
-    echo.
-  )
-)
-
-echo 正在启动界面，浏览器会自动打开；关闭本窗口即结束服务。
-echo 额外参数会原样传给服务端，例如： start_gui.bat --port 8800 --no-browser
+rem ---- warn early if the engine has not been built -------------------------
+if exist "%ROOT%\build\Release\gnss_parser.exe" goto :engineok
+if exist "%ROOT%\build\gnss_parser.exe" goto :engineok
+echo [WARN] gnss_parser.exe not found under build\.
+echo        The page still starts, but you must type the engine path at the top,
+echo        or build it first (see the README "Build" section).
 echo.
-python -m gui.server %*
-if errorlevel 1 pause
+
+:engineok
+echo Project folder : %ROOT%
+echo Python         : %PY%
+echo.
+echo Starting the local web UI. The browser opens automatically.
+echo Keep this window open while you use the page; close it to stop the service.
+echo Extra arguments are passed through, e.g.:
+echo     start_gui.bat --port 8800 --no-browser
+echo.
+
+%PY% -m gui.server %*
+set "RC=%ERRORLEVEL%"
+popd
+if not "%RC%"=="0" goto :failed
 endlocal
+exit /b 0
+
+:failed
+echo.
+echo [ERROR] The server exited with code %RC%.
+pause
+endlocal
+exit /b %RC%
+
+:noproject
+echo [ERROR] Cannot find gui\server.py.
+echo         Tried next to this script and: %DEFAULT_ROOT%
+echo         Fix: edit the DEFAULT_ROOT line in this file, or run it from the
+echo              project folder (gui\start_gui.bat).
+pause
+exit /b 1
+
+:nopython
+echo [ERROR] Python 3 was not found in PATH.
+echo         Install Python 3.9+ and tick "Add python.exe to PATH", then retry.
+pause
+exit /b 1
