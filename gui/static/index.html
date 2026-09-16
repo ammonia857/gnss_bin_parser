@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GNSS 解析工具</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">GNSS BIN 解析</div>
+
+    <label class="field">
+      <span>引擎</span>
+      <input id="engine-path" type="text" placeholder="自动探测（build/Release/gnss_parser.exe）" />
+      <button id="btn-save-engine" class="btn small">保存</button>
+      <button id="btn-redetect" class="btn small ghost" title="清空自定义路径，恢复自动探测">重新探测</button>
+    </label>
+
+    <label class="field grow">
+      <span>输出目录</span>
+      <input id="output-dir" type="text" placeholder="默认 <仓库>/parsed_output" />
+      <button id="btn-pick-outdir" class="btn small">选择目录</button>
+    </label>
+
+    <label class="switch">
+      <input id="auto-start" type="checkbox" />
+      <span>拖入即开始</span>
+    </label>
+
+    <button id="btn-pick-files" class="btn primary">选择 BIN 文件…</button>
+    <button id="btn-pick-folder" class="btn ghost">选择文件夹…</button>
+    <button id="btn-start" class="btn hidden" title="仅在「拖入即开始」关闭时出现">开始解析</button>
+    <button id="btn-clear" class="btn ghost">清空队列</button>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main class="layout">
+    <aside class="queue">
+      <div class="panel-title">任务队列 <span id="queue-count" class="muted"></span></div>
+      <ul id="job-list" class="job-list"></ul>
+      <div id="queue-empty" class="empty">把 .bin 文件拖进本页面，或点上方「选择 BIN 文件…」</div>
+    </aside>
+
+    <section class="detail">
+      <div class="panel-title">详情 <span id="detail-name" class="muted"></span></div>
+      <div id="detail-empty" class="empty">选中左侧任务查看统计与输出文件</div>
+      <div id="detail-body" class="hidden">
+        <div class="cards" id="stat-cards"></div>
+        <h3>星座分布</h3>
+        <div id="system-bars" class="bars"></div>
+        <h3>输出文件</h3>
+        <ul id="file-list" class="file-list"></ul>
+        <div id="job-message" class="job-message hidden"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="drop-overlay" class="drop-overlay hidden">
+    <div class="drop-box">
+      <strong>松开即加入队列</strong>
+      <p>⚠️ 拖拽会先把文件复制一份到临时目录；几百 MB 的大文件请改用上方「选择 BIN 文件…」（零拷贝）</p>
+    </div>
+  </div>
+
+  <div id="uploads" class="uploads"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -23,11 +23,11 @@ def _real_pick_files() -> list[str]:
     return [str(Path(p)) for p in paths]
 
 
-def _real_pick_folder() -> str | None:
-    """真实"选择文件夹"对话框。"""
+def _real_pick_folder(title: str = "选择包含 BIN 的文件夹") -> str | None:
+    """真实"选择文件夹"对话框（标题可定制，便于区分输入/输出目录）。"""
     from tkinter import filedialog
 
-    picked = filedialog.askdirectory(title="选择包含 BIN 的文件夹")
+    picked = filedialog.askdirectory(title=title)
     return str(Path(picked)) if picked else None
 
 
@@ -54,7 +54,7 @@ class NativePicker:
         try:
             while not self._stop.is_set():
                 try:
-                    kind, reply = self._requests.get(timeout=0.05)
+                    kind, reply, arg = self._requests.get(timeout=0.05)
                 except queue.Empty:
                     root.update()          # 维持窗口消息循环（对话框依赖它）
                     continue
@@ -62,7 +62,13 @@ class NativePicker:
                     if kind == "files":
                         reply.put(self._dialog_files())
                     elif kind == "folder":
-                        reply.put(self._dialog_folder())
+                        if arg:
+                            try:
+                                reply.put(self._dialog_folder(arg))
+                            except TypeError:       # 注入的假实现可能不接受标题参数
+                                reply.put(self._dialog_folder())
+                        else:
+                            reply.put(self._dialog_folder())
                     else:
                         reply.put(None)
                 except Exception:          # 对话框异常不应打死常驻线程
@@ -85,13 +91,13 @@ class NativePicker:
         """弹"选择文件"对话框；用户取消返回空列表，**超时返回 ``None``**。"""
         return self._request("files", timeout)
 
-    def pick_folder(self, timeout: float = 600) -> str | None:
-        """弹"选择文件夹"对话框；超时/取消返回 ``None``。"""
-        return self._request("folder", timeout) or None
+    def pick_folder(self, timeout: float = 600, title: str | None = None) -> str | None:
+        """弹"选择文件夹"对话框；超时/取消返回 ``None``；``title`` 可定制标题。"""
+        return self._request("folder", timeout, title) or None
 
-    def _request(self, kind: str, timeout: float):
+    def _request(self, kind: str, timeout: float, arg=None):
         reply: "queue.Queue" = queue.Queue(maxsize=1)
-        self._requests.put((kind, reply))
+        self._requests.put((kind, reply, arg))
         try:
             return reply.get(timeout=timeout)
         except queue.Empty:

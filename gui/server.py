@@ -201,6 +201,8 @@ def _make_handler(ctx: Context):
                         return self._send_json(200, {"paths": []})
                     bins = sorted(str(p) for p in Path(folder).glob("*.bin"))
                     return self._send_json(200, {"paths": bins})
+                if path == "/api/pick/outdir":
+                    return self._send_json(200, {"path": ctx.picker.pick_folder(title="选择输出目录") or ""})
                 if path == "/api/upload":
                     return self._upload()
                 if path == "/api/jobs":
@@ -208,6 +210,9 @@ def _make_handler(ctx: Context):
                 if path == "/api/jobs/clear":
                     removed = ctx.queue.clear(keep_running=True)
                     return self._send_json(200, {"removed": removed})
+                if path == "/api/jobs/start":
+                    queued = ctx.queue.start_pending()
+                    return self._send_json(200, {"queued": queued, "jobs": ctx.queue.snapshot()})
                 m = _JOB_ACTION_RE.match(path)
                 if m:
                     return self._job_action(m.group(1), m.group(2))
