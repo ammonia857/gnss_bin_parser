@@ -72,14 +72,22 @@ def sanitize_prefix(stem: str) -> str:
 # 引擎可能产出的 CSV 种类；判重时任一存在即视为前缀被占用
 _CSV_KINDS = ("range", "satvis", "satvis2", "bestpos")
 
+# 引擎默认前缀；实际产出 = f"{prefix}_{输入主名}_{类型}.csv"
+DEFAULT_PREFIX = "gnss"
+
 
 def unique_prefix(output_dir: Path, stem: str) -> str:
-    """返回未被占用的输出前缀：``stem``、``stem-2``、``stem-3``…（绝不覆盖已存在 CSV）。"""
+    """返回未被占用的输出前缀（该值直接作为 -p 传给引擎）。
+
+    真引擎实际产出 ``{prefix}_{stem}_{kind}.csv``（prefix = -p 值 + '_' + 输入主名），
+    因此判重必须带上原始主名 ``stem``；``stem`` 应为输入文件的**原始主名**
+    （``Path(input).stem``），不要传 sanitize 后的名字。
+    """
     out = Path(output_dir)
-    candidate, n = stem, 1
-    while any((out / f"{candidate}_{kind}.csv").exists() for kind in _CSV_KINDS):
+    candidate, n = DEFAULT_PREFIX, 1
+    while any((out / f"{candidate}_{stem}_{kind}.csv").exists() for kind in _CSV_KINDS):
         n += 1
-        candidate = f"{stem}-{n}"
+        candidate = f"{DEFAULT_PREFIX}-{n}"
     return candidate
 
 

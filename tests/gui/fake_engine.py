@@ -19,9 +19,14 @@ def main() -> int:
     delay = float(os.environ.get("FAKE_ENGINE_DELAY", "0"))
     fail = os.environ.get("FAKE_ENGINE_FAIL") == "1"
 
+    # 真引擎命名规则：实际前缀 = -p 值 + '_' + 输入文件主名（无去重，无条件拼接）
+    stem = os.path.splitext(os.path.basename(a.i))[0]
+    prefix = f"{a.p}_{stem}"
+
     size_mb = os.path.getsize(a.i) / 1048576 if os.path.exists(a.i) else 0.0
     print(f"解析文件: {a.i}", flush=True)
     print(f"输出目录: {a.o}", flush=True)
+    print(f"输出前缀: {prefix}", flush=True)
     for p in PROGRESS:
         time.sleep(delay)
         print(f"  进度: {p}% ({size_mb * p / 100:.2f} MB / {size_mb:.2f} MB)", flush=True)
@@ -38,7 +43,7 @@ def main() -> int:
     for kind, n in rows.items():
         if n == 0:
             continue
-        path = os.path.join(a.o, f"{a.p}_{kind}.csv")
+        path = os.path.join(a.o, f"{prefix}_{kind}.csv")
         with open(path, "w", encoding="utf-8-sig", newline="") as f:
             if kind == "range":
                 f.write("GPS_Week,TOW_ms,Sat_System,Sat_PRN,GloFreq,Pseudorange_m,PsrStd_m,"

@@ -48,11 +48,19 @@ class ParseTest(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             out = Path(d)
-            self.assertEqual(unique_prefix(out, "x"), "x")
-            (out / "x_range.csv").write_text("h\n", encoding="utf-8")
-            self.assertEqual(unique_prefix(out, "x"), "x-2")
-            (out / "x-2_range.csv").write_text("h\n", encoding="utf-8")
-            self.assertEqual(unique_prefix(out, "x"), "x-3")
+            self.assertEqual(unique_prefix(out, "x"), "gnss")
+            (out / "gnss_x_range.csv").write_text("h\n", encoding="utf-8")
+            self.assertEqual(unique_prefix(out, "x"), "gnss-2")
+            (out / "gnss-2_x_range.csv").write_text("h\n", encoding="utf-8")
+            self.assertEqual(unique_prefix(out, "x"), "gnss-3")
+            # 判重只看带主名的文件：别的主名的产物不影响本主名的判定
+            (out / "gnss_y_range.csv").write_text("h\n", encoding="utf-8")
+            self.assertEqual(unique_prefix(out, "y"), "gnss-2")
+            self.assertEqual(unique_prefix(out, "z"), "gnss")
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "gnss_y_range.csv").write_text("h\n", encoding="utf-8")
+            self.assertEqual(unique_prefix(out, "x"), "gnss")
 
     def test_detect_engine_prefers_env_and_build_paths(self):
         import os, tempfile
